@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MuseLink 群聊</title>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:800px;margin:0 auto;padding:20px;background:#f5f5f5}
+#status{padding:10px;background:#fff;border-radius:8px;margin-bottom:10px}
+.online{color:green}.offline{color:red}
+#chat{height:400px;overflow-y:auto;background:#fff;border-radius:8px;padding:15px;margin-bottom:10px}
+.msg{margin:8px 0;padding:8px 12px;background:#e8e8e8;border-radius:12px;max-width:80%}
+.msg.me{background:#007aff;color:#fff;margin-left:auto}
+#input-area{display:flex;gap:10px}
+#input{flex:1;padding:10px;border:1px solid #ddd;border-radius:8px}
+button{padding:10px 20px;background:#007aff;color:#fff;border:none;border-radius:8px;cursor:pointer}
+#task-form{background:#fff;padding:15px;border-radius:8px;margin-top:10px}
+#task-form input,#task-form textarea{width:100%;padding:8px;margin:5px 0;border:1px solid #ddd;border-radius:4px;box-sizing:border-box}
+</style>
+</head>
+<body>
+<h2>MuseLink 群聊</h2>
+<div id="status">连接中...</div>
+<div id="nodes"></div>
+<div id="chat"></div>
+<div id="input-area">
+<input id="input" placeholder="输入群聊消息..." onkeypress="if(event.key==='Enter')sendChat()">
+<button onclick="sendChat()">发送</button>
+</div>
+<div id="task-form">
+<h3>派任务</h3>
+<select id="target">
+<option value="muse">muse</option>
+<option value="muse-1">muse-1</option>
+<option value="muse-2">muse-2</option>
+<option value="muse-3">muse-3</option>
+</select>
+<input id="task-title" placeholder="任务标题">
+<textarea id="task-body" placeholder="任务正文" rows="3"></textarea>
+<button onclick="sendTask()">派发</button>
+</div>
+<script>
+const BROKER='wss://d2a41221.ala.asia-southeast1.emqxsl.com:8084/mqtt';
+const USER='mqtt_user';
+const PASS=''; // 部署时填写
+const SITE='1a6fea9c';
+const ROOT=`mlink/v1/${SITE}`;
+const client=mqtt.connect(BROKER,{username:USER,password:PASS,clientId:'web-'+Math.random().toString(16).slice(8)});
+const nodes={};
+client.on('connect',()=>{
+document.getElementById('status').innerHTML='<span class="online">● 已连接</span>';
+client.subscribe(`${ROOT}/chat`,{qos:1});
+client.subscribe(`${ROOT}/node/+/status`,{qos:1});
+client.subscribe(`${ROOT}/node/web/in`,{qos:1});
+});
+client.on('message',(topic,payload)=>{
+try{
+const env=JSON.parse(payload.toString());
+if(topic.endsWith('/chat'))addMsg(env.from,env.body);
+else if(topic.includes('/status')){
+const nid=topic.split('/')[4];
+nodes[nid]=payload.toString();renderNodes();
+}else if(env.type==='dm'||env.type==='task')addMsg(env.from,'['+env.type+'] '+(env.title||'')+' '+(env.body||'').slice(0,200));
+}catch(e){}
+});
+function addMsg(from,text){
+const d=document.createElement('div');d.className='msg';d.textContent=from+': '+text;
+document.getElementById('chat').appendChild(d);
+document.getElementById('chat').scrollTop=1e6;
+}
+function renderNodes(){
+document.getElementById('nodes').innerHTML=Object.entries(nodes).map(([k,v])=>`<span class="${v==='online'?'online':'offline'}">● ${k}</span>`).join(' ');
+}
+function sendChat(){
+const t=document.getElementById('input').value;if(!t)return;
+const env={proto:'muselink/1',from:'web',ts:Date.now()/1000,mid:Math.random().toString(16).slice(2,18),type:'chat',body:t};
+client.publish(`${ROOT}/chat`,JSON.stringify(env),{qos:1});
+document.getElementById('input').value='';
+}
+function sendTask(){
+const target=document.getElementById('target').value;
+const title=document.getElementById('task-title').value;
+const body=document.getElementById('task-body').value;
+if(!title||!body){alert('填标题和正文');return;}
+const env={proto:'muselink/1',from:'web',ts:Date.now()/1000,mid:Math.random().toString(16).slice(2,18),type:'task',title,body};
+client.publish(`${ROOT}/node/${target}/in`,JSON.stringify(env),{qos:1});
+addMsg('我',`→ ${target}: ${title}`);
+document.getElementById('task-title').value='';document.getElementById('task-body').value='';
+}
+</script>
+</body>
+</html>
