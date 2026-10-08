@@ -20,7 +20,7 @@ button{padding:10px 20px;background:#007aff;color:#fff;border:none;border-radius
 </style>
 </head>
 <body>
-<h2>MuseLink 群聊</h2>
+<h2>MuseLink 群聊 <button onclick="doLogout()" style="float:right;padding:6px 12px;font-size:14px;">登出</button></h2>
 <div id="status">连接中...</div>
 <div id="nodes"></div>
 <div id="chat"></div>
@@ -31,19 +31,60 @@ button{padding:10px 20px;background:#007aff;color:#fff;border:none;border-radius
 <div id="task-form">
 <h3>派任务</h3>
 <select id="target">
-<option value="muse">muse</option>
-<option value="muse-1">muse-1</option>
-<option value="muse-2">muse-2</option>
-<option value="muse-3">muse-3</option>
+<option value="">加载中...</option>
 </select>
 <input id="task-title" placeholder="任务标题">
 <textarea id="task-body" placeholder="任务正文" rows="3"></textarea>
 <button onclick="sendTask()">派发</button>
 </div>
+<div id="machine-mgmt" style="background:#fff;padding:15px;border-radius:8px;margin-top:10px">
+<h3>机器管理</h3>
+<div id="machine-list" style="margin-bottom:10px"></div>
+<div style="display:flex;gap:10px">
+<input id="new-machine-id" placeholder="机器ID (如 muse-4)" style="flex:1">
+<input id="new-machine-name" placeholder="显示名" style="flex:1">
+<button onclick="addMachine()" style="white-space:nowrap">添加</button>
+</div>
+</div>
 <script>
+async function doLogout(){
+await fetch('/api/logout',{method:'POST'});
+location.href='/login.html';
+}
+// 机器管理
+async function loadMachines(){
+try{
+const r=await fetch('/api/machines');
+const d=await r.json();
+if(d.ok){
+const sel=document.getElementById('target');
+sel.innerHTML=d.machines.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+const list=document.getElementById('machine-list');
+list.innerHTML=d.machines.map(m=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #eee"><span>${m.name} <small style="color:#999">(${m.id})</small></span><button onclick="removeMachine('${m.id}')" style="padding:4px 10px;font-size:12px;background:#ff3b30">删除</button></div>`).join('');
+}
+}catch(e){console.error('加载机器列表失败',e);}
+}
+async function addMachine(){
+const id=document.getElementById('new-machine-id').value.trim();
+const name=document.getElementById('new-machine-name').value.trim()||id;
+if(!id){alert('请输入机器ID');return;}
+const r=await fetch('/api/machines',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,name})});
+const d=await r.json();
+if(d.ok){document.getElementById('new-machine-id').value='';document.getElementById('new-machine-name').value='';loadMachines();if(d.warning)alert(d.warning);}
+else alert(d.error||'添加失败');
+}
+async function removeMachine(id){
+if(!confirm(`确定删除机器 ${id}？`))return;
+const r=await fetch('/api/machines?id='+encodeURIComponent(id),{method:'DELETE'});
+const d=await r.json();
+if(d.ok)loadMachines();
+else alert(d.error||'删除失败');
+}
+// 页面加载时获取机器列表
+loadMachines();
 const BROKER='wss://d2a41221.ala.asia-southeast1.emqxsl.com:8084/mqtt';
 const USER='mqtt_user';
-const PASS=''; // 部署时填写
+const PASS='123456789Wl-';
 const SITE='1a6fea9c';
 const ROOT=`mlink/v1/${SITE}`;
 const client=mqtt.connect(BROKER,{username:USER,password:PASS,clientId:'web-'+Math.random().toString(16).slice(8)});
