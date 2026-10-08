@@ -3,7 +3,7 @@ export async function onRequest({ request, env, next }) {
   const url = new URL(request.url);
   
   // 登录页和 API 不需要验证
-  if (url.pathname === '/login.html' || url.pathname.startsWith('/api/')) {
+  if (url.pathname === '/login.html' || url.pathname === '/login' || url.pathname.startsWith('/api/')) {
     return next();
   }
   
@@ -13,7 +13,7 @@ export async function onRequest({ request, env, next }) {
   
   if (!match) {
     // 未登录，重定向到登录页
-    return Response.redirect(new URL('/login.html', request.url), 302);
+    return Response.redirect(new URL('/login', request.url), 302);
   }
   
   const token = match[1];
@@ -22,12 +22,12 @@ export async function onRequest({ request, env, next }) {
   if (env.SESSIONS) {
     const session = await env.SESSIONS.get(token);
     if (!session) {
-      return Response.redirect(new URL('/login.html', request.url), 302);
+      return Response.redirect(new URL('/login', request.url), 302);
     }
     const data = JSON.parse(session);
     if (data.exp < Date.now()) {
       await env.SESSIONS.delete(token);
-      return Response.redirect(new URL('/login.html', request.url), 302);
+      return Response.redirect(new URL('/login', request.url), 302);
     }
   }
   // 没有 KV 时，有 cookie 即视为已登录（简化模式）
