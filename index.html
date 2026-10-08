@@ -116,7 +116,7 @@ button:disabled{background:#ccc}
 <script>
 const BROKER='wss://d2a41221.ala.asia-southeast1.emqxsl.com:8084/mqtt';
 const USER='mqtt_user';
-const PASS='123456789Wl-';
+const PASS=''; // 部署时填写
 const SITE='1a6fea9c';
 const ROOT=`mlink/v1/${SITE}`;
 const NODES=['muse','muse-1','muse-2','muse-3'];
@@ -159,8 +159,15 @@ function connect(){
   });
   client.on('error',()=>setStatus('offline','● 连接错误'));
   client.on('message',(topic,payload)=>{
+    const raw=payload.toString();
+    // 状态消息是纯文本 "online"/"offline"，先处理
+    if(topic.includes('/status')){
+      const nid=topic.split('/')[4];
+      nodes[nid]={online:raw.trim()==='online',lastSeen:Date.now()/1000};
+      renderNodes();
+      return;
+    }
     try{
-      const raw=payload.toString();
       const env=JSON.parse(raw);
       handleMsg(topic,env,raw);
     }catch(e){}
@@ -175,15 +182,6 @@ function handleMsg(topic,env,raw){
   const now=Date.now()/1000;
   if(topic.endsWith('/chat')){
     addMsg('chat',env.from,env.body||'',env.ts);
-    // 图片消息
-    if(env.body&&env.body.includes('Drive')&&env.body.includes('http')){
-      // 尝试提取图片链接
-    }
-  } else if(topic.includes('/status')){
-    const nid=topic.split('/')[4];
-    const online=raw.trim()==='online';
-    nodes[nid]={online,lastSeen:now};
-    renderNodes();
   } else if(topic.endsWith('/node/web/in')){
     // 发给 web 的 DM/回执
     const t=env.type||'dm';
