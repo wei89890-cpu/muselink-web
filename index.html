@@ -3,132 +3,340 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MuseLink 群聊</title>
+<title>MuseLink 控制台</title>
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <style>
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:800px;margin:0 auto;padding:20px;background:#f5f5f5}
-#status{padding:10px;background:#fff;border-radius:8px;margin-bottom:10px}
-.online{color:green}.offline{color:red}
-#chat{height:400px;overflow-y:auto;background:#fff;border-radius:8px;padding:15px;margin-bottom:10px}
-.msg{margin:8px 0;padding:8px 12px;background:#e8e8e8;border-radius:12px;max-width:80%}
-.msg.me{background:#007aff;color:#fff;margin-left:auto}
-#input-area{display:flex;gap:10px}
-#input{flex:1;padding:10px;border:1px solid #ddd;border-radius:8px}
-button{padding:10px 20px;background:#007aff;color:#fff;border:none;border-radius:8px;cursor:pointer}
-#task-form{background:#fff;padding:15px;border-radius:8px;margin-top:10px}
-#task-form input,#task-form textarea{width:100%;padding:8px;margin:5px 0;border:1px solid #ddd;border-radius:4px;box-sizing:border-box}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:900px;margin:0 auto;padding:16px;background:#f0f2f5;color:#1a1a1a}
+h2{margin:0 0 12px}
+.card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+#status{font-weight:600;display:flex;align-items:center;gap:8px}
+#status .dot{width:14px;height:14px;border-radius:50%;display:inline-block;flex-shrink:0}
+#status .dot.on{background:#22c55e;box-shadow:0 0 8px #22c55e;animation:pulse 2s infinite}
+#status .dot.off{background:#ef4444}
+#status .dot.conn{background:#d97706;animation:pulse 1s infinite}
+.online{color:#16a34a}.offline{color:#dc2626}.reconnecting{color:#d97706}
+/* 节点状态 */
+#nodes{display:flex;gap:10px;flex-wrap:wrap}
+.node{display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;cursor:pointer;transition:.15s;min-width:130px}
+.node:hover{border-color:#007aff;background:#eff6ff}
+.node .dot{width:16px;height:16px;border-radius:50%;flex-shrink:0;border:2px solid rgba(0,0,0,.1)}
+.node .dot.on{background:#22c55e;box-shadow:0 0 10px #22c55e,0 0 4px #22c55e;animation:pulse 2s infinite}
+.node .dot.off{background:#ef4444;box-shadow:0 0 6px rgba(239,68,68,.5)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.7}}
+.node .name{font-weight:600;font-size:14px}
+.node .last{font-size:11px;color:#888}
+/* 聊天 */
+#chat{height:380px;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
+.msg{padding:8px 12px;background:#f1f5f9;border-radius:12px;max-width:85%;word-break:break-word}
+.msg.me{background:#007aff;color:#fff;align-self:flex-end}
+.msg .from{font-size:11px;opacity:.7;margin-bottom:2px}
+.msg .time{font-size:10px;opacity:.5;margin-top:4px;text-align:right}
+.msg img{max-width:100%;border-radius:8px;margin-top:6px;cursor:pointer}
+.msg .task-status{font-size:12px;margin-top:4px;padding:4px 8px;border-radius:6px;display:inline-block}
+.task-pending{background:#fef3c7;color:#92400e}
+.task-done{background:#d1fae5;color:#065f46}
+.task-failed{background:#fee2e2;color:#991b1b}
+#input-area{display:flex;gap:8px}
+#input{flex:1;padding:10px;border:1px solid #ddd;border-radius:10px;font-size:14px}
+button{padding:10px 18px;background:#007aff;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:14px;white-space:nowrap}
+button:hover{background:#0062cc}
+button:disabled{background:#ccc}
+/* 任务表单 */
+#task-form input,#task-form textarea,#task-form select{width:100%;padding:9px;margin:6px 0;border:1px solid #ddd;border-radius:8px;font-size:14px}
+#task-form .row{display:flex;gap:8px}
+#task-form .row select{flex:1}
+/* DM 弹窗 */
+#dm-modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:100;align-items:center;justify-content:center}
+#dm-box{background:#fff;border-radius:14px;padding:18px;width:90%;max-width:450px;max-height:80vh;display:flex;flex-direction:column}
+#dm-chat{height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin:10px 0}
+#dm-input-area{display:flex;gap:8px}
+.tabs{display:flex;gap:6px;margin-bottom:10px}
+.tab{padding:8px 16px;border-radius:8px;cursor:pointer;background:#f1f5f9;font-size:14px}
+.tab.active{background:#007aff;color:#fff}
 </style>
 </head>
 <body>
-<h2>MuseLink 群聊 <button onclick="doLogout()" style="float:right;padding:6px 12px;font-size:14px;">登出</button></h2>
-<div id="status">连接中...</div>
+<h2>🚀 MuseLink 控制台</h2>
+
+<div class="card">
+<div id="status"><span class="reconnecting">● 连接中...</span></div>
+</div>
+
+<div class="card">
+<div style="font-weight:600;margin-bottom:8px">机器状态 <span style="font-size:12px;color:#888">(点击私聊)</span></div>
 <div id="nodes"></div>
+</div>
+
+<div class="card">
+<div class="tabs">
+<div class="tab active" onclick="switchTab('chat')">群聊</div>
+<div class="tab" onclick="switchTab('tasks')">任务跟踪</div>
+</div>
+<div id="tab-chat">
 <div id="chat"></div>
-<div id="input-area">
+<div id="input-area" style="margin-top:10px">
 <input id="input" placeholder="输入群聊消息..." onkeypress="if(event.key==='Enter')sendChat()">
 <button onclick="sendChat()">发送</button>
 </div>
-<div id="task-form">
-<h3>派任务</h3>
+</div>
+<div id="tab-tasks" style="display:none">
+<div id="task-list" style="max-height:300px;overflow-y:auto"></div>
+</div>
+</div>
+
+<div class="card" id="task-form">
+<h3 style="margin:0 0 8px">📋 派任务</h3>
+<div class="row">
 <select id="target">
-<option value="">加载中...</option>
+<option value="muse">muse</option>
+<option value="muse-1">muse-1</option>
+<option value="muse-2">muse-2</option>
+<option value="muse-3">muse-3</option>
+<option value="all">全部 (群发)</option>
 </select>
+</div>
 <input id="task-title" placeholder="任务标题">
 <textarea id="task-body" placeholder="任务正文" rows="3"></textarea>
 <button onclick="sendTask()">派发</button>
 </div>
-<div id="machine-mgmt" style="background:#fff;padding:15px;border-radius:8px;margin-top:10px">
-<h3>机器管理</h3>
-<div id="machine-list" style="margin-bottom:10px"></div>
-<div style="display:flex;gap:10px">
-<input id="new-machine-id" placeholder="机器ID (如 muse-4)" style="flex:1">
-<input id="new-machine-name" placeholder="显示名" style="flex:1">
-<button onclick="addMachine()" style="white-space:nowrap">添加</button>
+
+<!-- DM 弹窗 -->
+<div id="dm-modal">
+<div id="dm-box">
+<h3 style="margin:0">💬 <span id="dm-title"></span> <button style="float:right;padding:4px 12px" onclick="closeDM()">✕</button></h3>
+<div id="dm-chat"></div>
+<div id="dm-input-area">
+<input id="dm-input" placeholder="私聊消息..." style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px" onkeypress="if(event.key==='Enter')sendDM()">
+<button onclick="sendDM()">发送</button>
 </div>
 </div>
+</div>
+
 <script>
-async function doLogout(){
-await fetch('/api/logout',{method:'POST'});
-location.href='/login.html';
-}
-// 机器管理
-async function loadMachines(){
-try{
-const r=await fetch('/api/machines');
-const d=await r.json();
-if(d.ok){
-const sel=document.getElementById('target');
-sel.innerHTML=d.machines.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
-const list=document.getElementById('machine-list');
-list.innerHTML=d.machines.map(m=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #eee"><span>${m.name} <small style="color:#999">(${m.id})</small></span><button onclick="removeMachine('${m.id}')" style="padding:4px 10px;font-size:12px;background:#ff3b30">删除</button></div>`).join('');
-}
-}catch(e){console.error('加载机器列表失败',e);}
-}
-async function addMachine(){
-const id=document.getElementById('new-machine-id').value.trim();
-const name=document.getElementById('new-machine-name').value.trim()||id;
-if(!id){alert('请输入机器ID');return;}
-const r=await fetch('/api/machines',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,name})});
-const d=await r.json();
-if(d.ok){document.getElementById('new-machine-id').value='';document.getElementById('new-machine-name').value='';loadMachines();if(d.warning)alert(d.warning);}
-else alert(d.error||'添加失败');
-}
-async function removeMachine(id){
-if(!confirm(`确定删除机器 ${id}？`))return;
-const r=await fetch('/api/machines?id='+encodeURIComponent(id),{method:'DELETE'});
-const d=await r.json();
-if(d.ok)loadMachines();
-else alert(d.error||'删除失败');
-}
-// 页面加载时获取机器列表
-loadMachines();
 const BROKER='wss://d2a41221.ala.asia-southeast1.emqxsl.com:8084/mqtt';
 const USER='mqtt_user';
-const PASS='123456789Wl-';
+const PASS=''; // 部署时填写
 const SITE='1a6fea9c';
 const ROOT=`mlink/v1/${SITE}`;
-const client=mqtt.connect(BROKER,{username:USER,password:PASS,clientId:'web-'+Math.random().toString(16).slice(8)});
-const nodes={};
-client.on('connect',()=>{
-document.getElementById('status').innerHTML='<span class="online">● 已连接</span>';
-client.subscribe(`${ROOT}/chat`,{qos:1});
-client.subscribe(`${ROOT}/node/+/status`,{qos:1});
-client.subscribe(`${ROOT}/node/web/in`,{qos:1});
-});
-client.on('message',(topic,payload)=>{
-try{
-const env=JSON.parse(payload.toString());
-if(topic.endsWith('/chat'))addMsg(env.from,env.body);
-else if(topic.includes('/status')){
-const nid=topic.split('/')[4];
-nodes[nid]=payload.toString();renderNodes();
-}else if(env.type==='dm'||env.type==='task')addMsg(env.from,'['+env.type+'] '+(env.title||'')+' '+(env.body||'').slice(0,200));
-}catch(e){}
-});
-function addMsg(from,text){
-const d=document.createElement('div');d.className='msg';d.textContent=from+': '+text;
-document.getElementById('chat').appendChild(d);
-document.getElementById('chat').scrollTop=1e6;
+const NODES=['muse','muse-1','muse-2','muse-3'];
+const nodes={}; // {id: {online, lastSeen}}
+const tasks={}; // {mid: {title, target, status, time}}
+const dmHistory={}; // {nodeId: [{from, text, time}]}
+let dmTarget=null;
+let client=null;
+let reconnectTimer=null;
+
+function fmtTime(ts){
+  const d=new Date(ts*1000);
+  return d.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
 }
+function fmtAgo(ts){
+  const s=Math.floor(Date.now()/1000-ts);
+  if(s<60) return s+'秒前';
+  if(s<3600) return Math.floor(s/60)+'分钟前';
+  return Math.floor(s/3600)+'小时前';
+}
+
+function connect(){
+  setStatus('reconnecting','● 连接中...');
+  client=mqtt.connect(BROKER,{username:USER,password:PASS,clientId:'web-'+Math.random().toString(16).slice(8),reconnectPeriod:5000});
+  client.on('connect',()=>{
+    setStatus('online','● 已连接');
+    clearTimeout(reconnectTimer);
+    client.subscribe(`${ROOT}/chat`,{qos:1});
+    client.subscribe(`${ROOT}/node/+/status`,{qos:1});
+    client.subscribe(`${ROOT}/node/web/in`,{qos:1});
+    // 请求各节点状态
+    NODES.forEach(n=>client.publish(`${ROOT}/node/${n}/in`,JSON.stringify({proto:'muselink/1',from:'web',type:'ping'}),{qos:0}));
+  });
+  client.on('reconnect',()=>setStatus('reconnecting','● 重连中...'));
+  client.on('offline',()=>setStatus('offline','● 已断开'));
+  client.on('close',()=>{
+    setStatus('reconnecting','● 连接断开，5秒后重连...');
+    clearTimeout(reconnectTimer);
+    reconnectTimer=setTimeout(connect,5000);
+  });
+  client.on('error',()=>setStatus('offline','● 连接错误'));
+  client.on('message',(topic,payload)=>{
+    try{
+      const raw=payload.toString();
+      const env=JSON.parse(raw);
+      handleMsg(topic,env,raw);
+    }catch(e){}
+  });
+}
+function setStatus(cls,text){
+  const dotCls=cls==='online'?'on':cls==='offline'?'off':'conn';
+  document.getElementById('status').innerHTML=`<span class="dot ${dotCls}"></span><span>${text.replace('● ','')}</span>`;
+}
+
+function handleMsg(topic,env,raw){
+  const now=Date.now()/1000;
+  if(topic.endsWith('/chat')){
+    addMsg('chat',env.from,env.body||'',env.ts);
+    // 图片消息
+    if(env.body&&env.body.includes('Drive')&&env.body.includes('http')){
+      // 尝试提取图片链接
+    }
+  } else if(topic.includes('/status')){
+    const nid=topic.split('/')[4];
+    const online=raw.trim()==='online';
+    nodes[nid]={online,lastSeen:now};
+    renderNodes();
+  } else if(topic.endsWith('/node/web/in')){
+    // 发给 web 的 DM/回执
+    const t=env.type||'dm';
+    if(t==='task'){
+      addMsg('chat',env.from,`[任务] ${env.title||''}`,env.ts);
+    } else {
+      const body=(env.body||'').slice(0,500);
+      // 任务回执
+      if(body.startsWith('done:')||body.startsWith('hold:')){
+        updateTaskStatus(env);
+      }
+      addDM(env.from,body,env.ts);
+      addMsg('chat',env.from,`[私聊] ${body.slice(0,100)}`,env.ts);
+    }
+  }
+}
+
+function addMsg(tab,from,text,ts){
+  const chat=document.getElementById('chat');
+  const d=document.createElement('div');
+  d.className='msg'+(from==='web'||from==='我'?' me':'');
+  const time=ts?fmtTime(ts):fmtTime(Date.now()/1000);
+  // 图片链接转图片
+  let body=text.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const imgMatch=text.match(/(https?:\/\/[^\s]+\.(png|jpg|jpeg|gif))/i);
+  if(imgMatch) body+=`<br><img src="${imgMatch[1]}" onclick="window.open('${imgMatch[1]}')">`;
+  d.innerHTML=`<div class="from">${from}</div><div>${body}</div><div class="time">${time}</div>`;
+  chat.appendChild(d);
+  chat.scrollTop=chat.scrollHeight;
+}
+
 function renderNodes(){
-document.getElementById('nodes').innerHTML=Object.entries(nodes).map(([k,v])=>`<span class="${v==='online'?'online':'offline'}">● ${k}</span>`).join(' ');
+  const el=document.getElementById('nodes');
+  el.innerHTML=NODES.map(id=>{
+    const n=nodes[id]||{online:false,lastSeen:0};
+    const ago=n.lastSeen?fmtAgo(n.lastSeen):'未知';
+    return `<div class="node" onclick="openDM('${id}')">
+      <span class="dot ${n.online?'on':'off'}"></span>
+      <span><div class="name">${id}</div><div class="last">${n.online?'在线 · '+ago:'离线'}</div></span>
+    </div>`;
+  }).join('');
 }
+
+function switchTab(t){
+  document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('tab-chat').style.display=t==='chat'?'block':'none';
+  document.getElementById('tab-tasks').style.display=t==='tasks'?'block':'none';
+}
+
 function sendChat(){
-const t=document.getElementById('input').value;if(!t)return;
-const env={proto:'muselink/1',from:'web',ts:Date.now()/1000,mid:Math.random().toString(16).slice(2,18),type:'chat',body:t};
-client.publish(`${ROOT}/chat`,JSON.stringify(env),{qos:1});
-document.getElementById('input').value='';
+  const t=document.getElementById('input').value.trim();
+  if(!t||!client||!client.connected) return;
+  const env={proto:'muselink/1',from:'web',ts:Date.now()/1000,mid:Math.random().toString(16).slice(2,18),type:'chat',body:t};
+  client.publish(`${ROOT}/chat`,JSON.stringify(env),{qos:1});
+  addMsg('chat','我',t,env.ts);
+  document.getElementById('input').value='';
 }
+
 function sendTask(){
-const target=document.getElementById('target').value;
-const title=document.getElementById('task-title').value;
-const body=document.getElementById('task-body').value;
-if(!title||!body){alert('填标题和正文');return;}
-const env={proto:'muselink/1',from:'web',ts:Date.now()/1000,mid:Math.random().toString(16).slice(2,18),type:'task',title,body};
-client.publish(`${ROOT}/node/${target}/in`,JSON.stringify(env),{qos:1});
-addMsg('我',`→ ${target}: ${title}`);
-document.getElementById('task-title').value='';document.getElementById('task-body').value='';
+  const target=document.getElementById('target').value;
+  const title=document.getElementById('task-title').value.trim();
+  const body=document.getElementById('task-body').value.trim();
+  if(!title||!body){alert('请填写标题和正文');return;}
+  if(!client||!client.connected){alert('未连接');return;}
+  const mid=Math.random().toString(16).slice(2,18);
+  const env={proto:'muselink/1',from:'web',ts:Date.now()/1000,mid,type:'task',title,body};
+  const targets=target==='all'?NODES:[target];
+  targets.forEach(tg=>{
+    tasks[mid+tg]={title,target:tg,status:'pending',time:Date.now()/1000,mid};
+    client.publish(`${ROOT}/node/${tg}/in`,JSON.stringify({...env,mid:mid+tg}),{qos:1});
+  });
+  renderTasks();
+  addMsg('chat','我',`📋 派任务 → ${target}: ${title}`,Date.now()/1000);
+  document.getElementById('task-title').value='';
+  document.getElementById('task-body').value='';
 }
+
+function updateTaskStatus(env){
+  const body=env.body||'';
+  // 尝试匹配任务
+  Object.keys(tasks).forEach(k=>{
+    if(body.includes(tasks[k].title.slice(0,20))){
+      tasks[k].status=body.startsWith('done:')?'done':'failed';
+      tasks[k].receipt=body.slice(0,200);
+    }
+  });
+  renderTasks();
+}
+
+function renderTasks(){
+  const el=document.getElementById('task-list');
+  const list=Object.values(tasks).sort((a,b)=>b.time-a.time);
+  if(!list.length){el.innerHTML='<div style="color:#888;padding:20px;text-align:center">暂无任务</div>';return;}
+  el.innerHTML=list.map(t=>{
+    const cls=t.status==='done'?'task-done':t.status==='failed'?'task-failed':'task-pending';
+    const txt=t.status==='done'?'✅ 完成':t.status==='failed'?'❌ 失败':'⏳ 待回执';
+    return `<div class="msg" style="max-width:100%">
+      <div class="from">→ ${t.target} · ${fmtTime(t.time)}</div>
+      <div><b>${t.title}</b></div>
+      <div class="task-status ${cls}">${txt}</div>
+      ${t.receipt?`<div style="font-size:12px;color:#666;margin-top:4px">${t.receipt}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// DM 私聊
+function openDM(nodeId){
+  dmTarget=nodeId;
+  document.getElementById('dm-title').textContent=nodeId;
+  document.getElementById('dm-modal').style.display='flex';
+  renderDM();
+}
+function closeDM(){
+  document.getElementById('dm-modal').style.display='none';
+  dmTarget=null;
+}
+function renderDM(){
+  if(!dmTarget) return;
+  const el=document.getElementById('dm-chat');
+  const hist=dmHistory[dmTarget]||[];
+  el.innerHTML=hist.map(m=>`<div class="msg${m.from==='web'?' me':''}"><div class="from">${m.from}</div><div>${m.text}</div><div class="time">${fmtTime(m.ts)}</div></div>`).join('')||'<div style="color:#888;text-align:center;padding:20px">暂无私聊记录</div>';
+  el.scrollTop=el.scrollHeight;
+}
+function addDM(from,text,ts){
+  if(!dmHistory[from]) dmHistory[from]=[];
+  dmHistory[from].push({from,text,ts:ts||Date.now()/1000});
+  if(dmTarget===from) renderDM();
+}
+function sendDM(){
+  const t=document.getElementById('dm-input').value.trim();
+  if(!t||!dmTarget||!client||!client.connected) return;
+  const env={proto:'muselink/1',from:'web',ts:Date.now()/1000,mid:Math.random().toString(16).slice(2,18),type:'dm',body:t};
+  client.publish(`${ROOT}/node/${dmTarget}/in`,JSON.stringify(env),{qos:1});
+  addDM('web',t,env.ts);
+  renderDM();
+  document.getElementById('dm-input').value='';
+}
+
+// 初始化
+NODES.forEach(id=>nodes[id]={online:false,lastSeen:0});
+renderNodes();
+renderTasks();
+connect();
+setInterval(()=>{
+  // 30秒无心跳则标离线
+  const now=Date.now()/1000;
+  let changed=false;
+  Object.keys(nodes).forEach(id=>{
+    if(nodes[id].online&&now-nodes[id].lastSeen>90){nodes[id].online=false;changed=true;}
+  });
+  if(changed) renderNodes();
+},10000);
 </script>
 </body>
 </html>
