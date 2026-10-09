@@ -155,7 +155,8 @@ function removeNode(n){
   if(client&&client.connected) client.unsubscribe(`${ROOT}/node/${n}/status`);
 }
 const nodes={}; // {id: {online, lastSeen}}
-const tasks={}; // {mid: {title, target, status, time}}
+let tasks=JSON.parse(localStorage.getItem('mlink_tasks')||'{}'); // {mid: {title, target, status, time}}
+function saveTasks(){ localStorage.setItem('mlink_tasks',JSON.stringify(tasks)); }
 const dmHistory={}; // {nodeId: [{from, text, time}]}
 let dmTarget=null;
 let client=null;
@@ -286,6 +287,7 @@ function sendTask(){
     tasks[mid+tg]={title,target:tg,status:'pending',time:Date.now()/1000,mid};
     client.publish(`${ROOT}/node/${tg}/in`,JSON.stringify({...env,mid:mid+tg}),{qos:1});
   });
+  saveTasks();
   renderTasks();
   addMsg('chat','我',`📋 派任务 → ${target}: ${title}`,Date.now()/1000);
   document.getElementById('task-title').value='';
@@ -301,6 +303,7 @@ function updateTaskStatus(env){
       tasks[k].receipt=body.slice(0,200);
     }
   });
+  saveTasks();
   renderTasks();
 }
 
