@@ -129,8 +129,10 @@ function saveNodes(){ localStorage.setItem('mlink_nodes',JSON.stringify(NODES));
 function renderNodes(){
   const grid=document.getElementById('nodes'); grid.innerHTML='';
   NODES.forEach(n=>{
+    const st=nodes[n]||{online:false,lastSeen:0};
+    const ago=st.lastSeen?fmtAgo(st.lastSeen):'未知';
     const d=document.createElement('div'); d.className='node'; d.id='node-'+n; d.onclick=()=>openDM(n);
-    d.innerHTML=`<span class="dot offline" id="dot-${n}"></span><b>${n}</b><br><small class="st" id="st-${n}">离线</small>`;
+    d.innerHTML=`<span class="dot ${st.online?'on':'off'}" id="dot-${n}"></span><span><div class="name">${n}</div><div class="last" id="st-${n}">${st.online?'在线 · '+ago:'离线'}</div></span>`;
     grid.appendChild(d);
   });
   const sel=document.getElementById('target'); sel.innerHTML='';
