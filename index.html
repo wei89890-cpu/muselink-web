@@ -72,6 +72,8 @@ button:disabled{background:#ccc}
 <div class="tabs">
 <div class="tab active" onclick="switchTab('chat')">群聊</div>
 <div class="tab" onclick="switchTab('tasks')">任务跟踪</div>
+<span style="flex:1"></span>
+<button onclick="clearTasks()" style="background:#f44;padding:4px 12px;font-size:12px;display:none" id="clear-tasks-btn">清空</button>
 </div>
 <div id="tab-chat">
 <div id="chat"></div>
@@ -263,6 +265,11 @@ function switchTab(t){
   event.target.classList.add('active');
   document.getElementById('tab-chat').style.display=t==='chat'?'block':'none';
   document.getElementById('tab-tasks').style.display=t==='tasks'?'block':'none';
+  document.getElementById('clear-tasks-btn').style.display=t==='tasks'?'block':'none';
+}
+function clearTasks(){
+  if(!confirm('清空所有任务记录？')) return;
+  tasks={}; saveTasks(); renderTasks();
 }
 
 function sendChat(){
@@ -314,11 +321,11 @@ function renderTasks(){
   el.innerHTML=list.map(t=>{
     const cls=t.status==='done'?'task-done':t.status==='failed'?'task-failed':'task-pending';
     const txt=t.status==='done'?'✅ 完成':t.status==='failed'?'❌ 失败':'⏳ 待回执';
-    return `<div class="msg" style="max-width:100%">
+    return `<div class="msg" style="max-width:100%;padding:12px 14px;font-size:15px;margin-bottom:8px">
       <div class="from">→ ${t.target} · ${fmtTime(t.time)}</div>
       <div><b>${t.title}</b></div>
       <div class="task-status ${cls}">${txt}</div>
-      ${t.receipt?`<div style="font-size:12px;color:#666;margin-top:4px">${t.receipt}</div>`:''}
+      ${t.receipt?`<div style="font-size:13px;color:#666;margin-top:6px">${t.receipt}</div>`:''}
     </div>`;
   }).join('');
 }
