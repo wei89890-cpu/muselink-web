@@ -225,7 +225,15 @@ function setStatus(cls,text){
   document.getElementById('status').innerHTML=`<span class="dot ${dotCls}"></span><span>${text.replace('● ','')}</span>`;
 }
 
+const seenMids=new Set();
 function handleMsg(topic,env,raw){
+  // 按 mid 去重
+  const mid=env.mid||'';
+  if(mid){
+    if(seenMids.has(mid)) return;
+    seenMids.add(mid);
+    if(seenMids.size>1000){ seenMids.clear(); }
+  }
   const now=Date.now()/1000;
   if(topic.endsWith('/chat')){
     // 过滤掉自己发的（本地已添加，避免重复）
