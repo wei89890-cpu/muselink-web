@@ -253,18 +253,6 @@ function addMsg(tab,from,text,ts){
   chat.scrollTop=chat.scrollHeight;
 }
 
-function renderNodes(){
-  const el=document.getElementById('nodes');
-  el.innerHTML=NODES.map(id=>{
-    const n=nodes[id]||{online:false,lastSeen:0};
-    const ago=n.lastSeen?fmtAgo(n.lastSeen):'未知';
-    return `<div class="node" onclick="openDM('${id}')">
-      <span class="dot ${n.online?'on':'off'}"></span>
-      <span><div class="name">${id}</div><div class="last">${n.online?'在线 · '+ago:'离线'}</div></span>
-    </div>`;
-  }).join('');
-}
-
 function switchTab(t){
   document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
   event.target.classList.add('active');
