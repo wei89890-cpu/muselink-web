@@ -95,7 +95,6 @@ button:disabled{background:#ccc}
 <div id="mgr-nodes" style="margin-top:12px"></div>
 </div>
 
-<div id="main-page">
 <div class="card" style="padding:8px;text-align:right">
 <button onclick="showPage('mgr')" style="background:#666;padding:6px 16px;font-size:14px">⚙️ 机器管理</button>
 </div>
@@ -382,9 +381,9 @@ setInterval(()=>{
 },10000);
 
 function showPage(p){
-  document.getElementById('machine-mgr').style.display = p==='mgr' ? 'block' : 'none';
-  document.getElementById('main-page').style.display = p==='mgr' ? 'none' : 'block';
-  if(p==='mgr') renderMgrNodes();
+  const mgr=document.getElementById('machine-mgr');
+  mgr.style.display = p==='mgr' ? 'block' : 'none';
+  if(p==='mgr'){ renderMgrNodes(); mgr.scrollIntoView(); }
 }
 function renderMgrNodes(){
   const c=document.getElementById('mgr-nodes'); c.innerHTML='';
@@ -396,6 +395,5 @@ function renderMgrNodes(){
   });
 }
 </script>
-</div>
 </body>
 </html>
