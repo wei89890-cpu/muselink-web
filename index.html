@@ -3,8 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MuseLink 控制台</title>
-<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<title>MuseLink 控制台 (Workers 实时版)</title>
 <style>
 *{box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:900px;margin:0 auto;padding:16px;background:#f0f2f5;color:#1a1a1a}
@@ -63,6 +62,14 @@ button:disabled{background:#ccc}
 
 <div class="card">
 <div id="status"><span class="reconnecting">● 连接中...</span></div>
+</div>
+
+<div class="card" id="gw-settings" style="display:none">
+<h3 style="margin:0 0 8px">⚙️ 网关设置</h3>
+<input id="ws-url" placeholder="wss://muselink-realtime.你的子域.workers.dev" style="width:100%;padding:9px;margin:6px 0;border:1px solid #ddd;border-radius:8px;font-size:14px">
+<input id="ws-token" type="password" placeholder="连接 token（与 Worker 的 MUSELINK_TOKEN 一致）" style="width:100%;padding:9px;margin:6px 0;border:1px solid #ddd;border-radius:8px;font-size:14px">
+<button onclick="saveSettings()">保存并连接</button>
+<small style="color:#666;display:block;margin-top:6px">token 只保存在本机 localStorage，不上传</small>
 </div>
 
 <div class="card">
@@ -129,13 +136,27 @@ button:disabled{background:#ccc}
 </div>
 
 <script>
-const BROKER='wss://d2a41221.ala.asia-southeast1.emqxsl.com:8084/mqtt';
-const USER='mqtt_user';
-const PASS='123456789Wl-'; // 部署时填写
-const SITE='1a6fea9c';
-const ROOT=`mlink/v1/${SITE}`;
+// Workers 实时网关：无硬编码凭证。网关地址与 token 存在 localStorage（首次打开填写）。
+let WS_URL=localStorage.getItem('mlink_ws_url')||'';
+let WS_TOKEN=localStorage.getItem('mlink_ws_token')||'';
 let NODES=JSON.parse(localStorage.getItem('mlink_nodes')||'["muse","muse-1","muse-2","muse-3"]');
 function saveNodes(){ localStorage.setItem('mlink_nodes',JSON.stringify(NODES)); }
+function saveSettings(){
+  WS_URL=document.getElementById('ws-url').value.trim().replace(/\/$/,'');
+  WS_TOKEN=document.getElementById('ws-token').value.trim();
+  if(!WS_URL||!WS_TOKEN){alert('请填写网关地址和 token');return;}
+  localStorage.setItem('mlink_ws_url',WS_URL);
+  localStorage.setItem('mlink_ws_token',WS_TOKEN);
+  document.getElementById('gw-settings').style.display='none';
+  connect();
+}
+function showSettings(show){
+  document.getElementById('gw-settings').style.display=show?'block':'none';
+  if(show){
+    document.getElementById('ws-url').value=WS_URL;
+    document.getElementById('ws-token').value=WS_TOKEN;
+  }
+}
 function renderNodes(){
   const grid=document.getElementById('nodes'); grid.innerHTML='';
   NODES.forEach(n=>{
@@ -148,27 +169,35 @@ function renderNodes(){
   const sel=document.getElementById('target'); sel.innerHTML='';
   NODES.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
   const all=document.createElement('option'); all.value='all'; all.textContent='全部 (群发)'; sel.appendChild(all);
-  if(client&&client.connected){ NODES.forEach(n=>client.subscribe(`${ROOT}/node/${n}/status`,{qos:1})); }
 }
 function addNode(){
   const inp=document.getElementById('new-node'); const n=inp.value.trim();
   if(!n){ alert('输入机器名'); return; }
   if(NODES.includes(n)){ alert('已存在'); return; }
   NODES.push(n); nodes[n]={online:false,lastSeen:0}; saveNodes(); renderNodes(); inp.value='';
-  if(client&&client.connected) client.subscribe(`${ROOT}/node/${n}/status`,{qos:1});
 }
 function removeNode(n){
   if(!confirm(`删除机器 ${n}？`)) return;
   NODES=NODES.filter(x=>x!==n); delete nodes[n]; saveNodes(); renderNodes();
-  if(client&&client.connected) client.unsubscribe(`${ROOT}/node/${n}/status`);
 }
 const nodes={}; // {id: {online, lastSeen}}
 let tasks=JSON.parse(localStorage.getItem('mlink_tasks')||'{}'); // {mid: {title, target, status, time}}
 function saveTasks(){ localStorage.setItem('mlink_tasks',JSON.stringify(tasks)); }
 const dmHistory={}; // {nodeId: [{from, text, time}]}
 let dmTarget=null;
-let client=null;
+let ws=null;
+let wsOk=false;
 let reconnectTimer=null;
+let hbTimer=null;
+
+function newEnv(type,extra){
+  return Object.assign({proto:'muselink/1',from:'web',ts:Date.now()/1000,
+    mid:Math.random().toString(16).slice(2,18),type},extra||{});
+}
+function wsSend(env){
+  if(ws&&ws.readyState===1){ ws.send(JSON.stringify(env)); return true; }
+  return false;
+}
 
 function fmtTime(ts){
   const d=new Date(ts*1000);
@@ -182,47 +211,38 @@ function fmtAgo(ts){
 }
 
 function connect(){
+  if(!WS_URL||!WS_TOKEN){
+    setStatus('offline','● 未配置网关');
+    showSettings(true);
+    return;
+  }
   setStatus('reconnecting','● 连接中...');
-  client=mqtt.connect(BROKER,{
-    username:USER,password:PASS,
-    clientId:'web-'+Math.random().toString(16).slice(8),
-    reconnectPeriod:3000,
-    keepalive:30,
-    connectTimeout:10000,
-    resubscribe:true,
-    clean:false
-  });
-  client.on('connect',()=>{
+  let url;
+  try{ url=WS_URL+'/ws?id=web&token='+encodeURIComponent(WS_TOKEN); ws=new WebSocket(url); }
+  catch(e){ scheduleReconnect(); return; }
+  ws.onopen=()=>{
+    wsOk=true;
     setStatus('online','● 已连接');
     clearTimeout(reconnectTimer);
-    client.subscribe(`${ROOT}/chat`,{qos:1});
-    client.subscribe(`${ROOT}/node/+/status`,{qos:1});
-    client.subscribe(`${ROOT}/node/web/in`,{qos:1});
-    // 请求各节点状态
-    NODES.forEach(n=>client.publish(`${ROOT}/node/${n}/in`,JSON.stringify({proto:'muselink/1',from:'web',type:'ping'}),{qos:0}));
-  });
-  client.on('reconnect',()=>setStatus('reconnecting','● 重连中...'));
-  client.on('offline',()=>setStatus('offline','● 已断开'));
-  client.on('close',()=>{
+    wsSend(newEnv('hello',{name:'web',caps:['chat']}));
+    wsSend(newEnv('presence_req'));
+    clearInterval(hbTimer);
+    hbTimer=setInterval(()=>{ if(wsOk) wsSend(newEnv('heartbeat')); },30000);
+  };
+  ws.onmessage=(ev)=>{
+    try{ handleEnv(JSON.parse(ev.data)); }catch(e){}
+  };
+  ws.onclose=()=>{
+    wsOk=false; ws=null;
+    clearInterval(hbTimer);
     setStatus('reconnecting','● 连接断开，5秒后重连...');
-    clearTimeout(reconnectTimer);
-    reconnectTimer=setTimeout(connect,5000);
-  });
-  client.on('error',()=>setStatus('offline','● 连接错误'));
-  client.on('message',(topic,payload)=>{
-    const raw=payload.toString();
-    // 状态消息是纯文本 "online"/"offline"，先处理
-    if(topic.includes('/status')){
-      const nid=topic.split('/')[4];
-      nodes[nid]={online:raw.trim()==='online',lastSeen:Date.now()/1000};
-      renderNodes();
-      return;
-    }
-    try{
-      const env=JSON.parse(raw);
-      handleMsg(topic,env,raw);
-    }catch(e){}
-  });
+    scheduleReconnect();
+  };
+  ws.onerror=()=>setStatus('offline','● 连接错误');
+}
+function scheduleReconnect(){
+  clearTimeout(reconnectTimer);
+  reconnectTimer=setTimeout(connect,5000);
 }
 function setStatus(cls,text){
   const dotCls=cls==='online'?'on':cls==='offline'?'off':'conn';
@@ -230,7 +250,8 @@ function setStatus(cls,text){
 }
 
 const seenMids=new Set();
-function handleMsg(topic,env,raw){
+// hub 通过 WebSocket 直接推送 envelope（无 topic），按 type 分发
+function handleEnv(env){
   // 按 mid 去重
   const mid=env.mid||'';
   if(mid){
@@ -238,28 +259,35 @@ function handleMsg(topic,env,raw){
     seenMids.add(mid);
     if(seenMids.size>1000){ seenMids.clear(); }
   }
-  const now=Date.now()/1000;
-  if(topic.endsWith('/chat')){
+  const t=env.type||'';
+  if(t==='chat'){
     // 过滤掉自己发的（本地已添加，避免重复）
     if(env.from==='web') return;
     const body=env.body||'';
     // 过滤系统播报：回执规范、done:开头的系统消息不在群聊显示
     if(body.includes('回执规范') || body.startsWith('done:')) return;
     addMsg('chat',env.from,body,env.ts);
-  } else if(topic.endsWith('/node/web/in')){
-    // 发给 web 的 DM/回执
-    const t=env.type||'dm';
-    if(t==='task'){
-      addMsg('chat',env.from,`[任务] ${env.title||''}`,env.ts);
-    } else {
-      const body=(env.body||'').slice(0,500);
-      // 任务回执：只更新任务状态和DM面板，不在群聊显示
-      if(body.startsWith('done:')||body.startsWith('hold:')){
-        updateTaskStatus(env);
-      }
-      addDM(env.from,body,env.ts);
+  } else if(t==='dm'){
+    const body=(env.body||'').slice(0,500);
+    // 任务回执：只更新任务状态和DM面板，不在群聊显示
+    if(body.startsWith('done:')||body.startsWith('hold:')){
+      updateTaskStatus(env);
     }
+    addDM(env.from,body,env.ts);
+  } else if(t==='presence'){
+    // hub 推送的全网在线状态（权威）
+    const list=env.nodes||{};
+    Object.keys(list).forEach(id=>{
+      if(id==='web') return;
+      nodes[id]={online:!!list[id].online,lastSeen:list[id].lastSeen||Date.now()/1000};
+    });
+    renderNodes();
+  } else if(t==='welcome'){
+    wsSend(newEnv('presence_req'));
+  } else if(t==='error'){
+    addMsg('chat','hub','⚠️ '+(env.body||'hub error'),env.ts);
   }
+  // ack / subscribed 忽略
 }
 
 function addMsg(tab,from,text,ts){
@@ -290,9 +318,9 @@ function clearTasks(){
 
 function sendChat(){
   const t=document.getElementById('input').value.trim();
-  if(!t||!client||!client.connected) return;
-  const env={proto:'muselink/1',from:'web',ts:Date.now()/1000,mid:Math.random().toString(16).slice(2,18),type:'chat',body:t};
-  client.publish(`${ROOT}/chat`,JSON.stringify(env),{qos:1});
+  if(!t||!wsOk) return;
+  const env=newEnv('chat',{body:t});
+  wsSend(env);
   addMsg('chat','我',t,env.ts);
   document.getElementById('input').value='';
 }
@@ -304,20 +332,19 @@ function sendTask(){
   const fileInput=document.getElementById('task-file');
   const file=fileInput.files[0];
   if(!title||!body){alert('请填写标题和正文');return;}
-  if(!client||!client.connected){alert('未连接');return;}
-  
+  if(!wsOk){alert('未连接');return;}
+
   const doSend=(fileData)=>{
-    const mid=Math.random().toString(16).slice(2,18);
-    const env={proto:'muselink/1',from:'web',ts:Date.now()/1000,mid,type:'task',title,body};
-    if(fileData){
-      env.file_name=fileData.name;
-      env.file_size=fileData.size;
-      env.file_data=fileData.data; // base64
-    }
     const targets=target==='all'?NODES:[target];
     targets.forEach(tg=>{
-      tasks[mid+tg]={title,target:tg,status:'pending',time:Date.now()/1000,mid};
-      client.publish(`${ROOT}/node/${tg}/in`,JSON.stringify({...env,mid:mid+tg}),{qos:1});
+      const env=newEnv('task',{to:tg,title,body});
+      if(fileData){
+        env.file_name=fileData.name;
+        env.file_size=fileData.size;
+        env.file_data=fileData.data; // base64
+      }
+      tasks[env.mid+tg]={title,target:tg,status:'pending',time:Date.now()/1000,mid:env.mid};
+      wsSend(env);
     });
     saveTasks();
     renderTasks();
@@ -399,9 +426,9 @@ function addDM(from,text,ts){
 }
 function sendDM(){
   const t=document.getElementById('dm-input').value.trim();
-  if(!t||!dmTarget||!client||!client.connected) return;
-  const env={proto:'muselink/1',from:'web',ts:Date.now()/1000,mid:Math.random().toString(16).slice(2,18),type:'dm',body:t};
-  client.publish(`${ROOT}/node/${dmTarget}/in`,JSON.stringify(env),{qos:1});
+  if(!t||!dmTarget||!wsOk) return;
+  const env=newEnv('dm',{to:dmTarget,body:t});
+  wsSend(env);
   addDM('web',t,env.ts);
   renderDM();
   document.getElementById('dm-input').value='';
@@ -413,11 +440,11 @@ renderNodes();
 renderTasks();
 connect();
 setInterval(()=>{
-  // 30秒无心跳则标离线
+  // hub 权威推送 presence；150秒无更新则标离线（兜底，hub 120秒踢掉超时会话）
   const now=Date.now()/1000;
   let changed=false;
   Object.keys(nodes).forEach(id=>{
-    if(nodes[id].online&&now-nodes[id].lastSeen>90){nodes[id].online=false;changed=true;}
+    if(nodes[id].online&&now-nodes[id].lastSeen>150){nodes[id].online=false;changed=true;}
   });
   if(changed) renderNodes();
 },10000);
