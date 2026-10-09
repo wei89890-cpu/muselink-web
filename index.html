@@ -140,7 +140,15 @@ function fmtAgo(ts){
 
 function connect(){
   setStatus('reconnecting','● 连接中...');
-  client=mqtt.connect(BROKER,{username:USER,password:PASS,clientId:'web-'+Math.random().toString(16).slice(8),reconnectPeriod:5000});
+  client=mqtt.connect(BROKER,{
+    username:USER,password:PASS,
+    clientId:'web-'+Math.random().toString(16).slice(8),
+    reconnectPeriod:3000,
+    keepalive:30,
+    connectTimeout:10000,
+    resubscribe:true,
+    clean:false
+  });
   client.on('connect',()=>{
     setStatus('online','● 已连接');
     clearTimeout(reconnectTimer);
