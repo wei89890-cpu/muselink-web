@@ -38,6 +38,7 @@ h2{margin:0 0 12px}
 .task-pending{background:#fef3c7;color:#92400e}
 .task-done{background:#d1fae5;color:#065f46}
 .task-failed{background:#fee2e2;color:#991b1b}
+.task-hold{background:#e0e7ff;color:#3730a3}
 #input-area{display:flex;gap:8px}
 #input{flex:1;padding:10px;border:1px solid #ddd;border-radius:10px;font-size:16px}
 button{padding:10px 18px;background:#007aff;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:14px;white-space:nowrap}
@@ -304,11 +305,13 @@ function sendTask(){
 
 function updateTaskStatus(env){
   const body=env.body||'';
-  // 尝试匹配任务
+  const from=env.from||'';
+  // 按标题+发送者精确匹配，避免同名任务误标
   Object.keys(tasks).forEach(k=>{
-    if(body.includes(tasks[k].title.slice(0,20))){
-      tasks[k].status=body.startsWith('done:')?'done':'failed';
-      tasks[k].receipt=body.slice(0,200);
+    const t=tasks[k];
+    if(body.includes(t.title.slice(0,20)) && (t.target===from || !from)){
+      t.status=body.startsWith('done:')?'done':body.startsWith('hold:')?'hold':'failed';
+      t.receipt=body.slice(0,200);
     }
   });
   saveTasks();
@@ -320,8 +323,8 @@ function renderTasks(){
   const list=Object.values(tasks).sort((a,b)=>b.time-a.time);
   if(!list.length){el.innerHTML='<div style="color:#888;padding:20px;text-align:center">暂无任务</div>';return;}
   el.innerHTML=list.map(t=>{
-    const cls=t.status==='done'?'task-done':t.status==='failed'?'task-failed':'task-pending';
-    const txt=t.status==='done'?'✅ 完成':t.status==='failed'?'❌ 失败':'⏳ 待回执';
+    const cls=t.status==='done'?'task-done':t.status==='failed'?'task-failed':t.status==='hold'?'task-hold':'task-pending';
+    const txt=t.status==='done'?'✅ 完成':t.status==='failed'?'❌ 失败':t.status==='hold'?'⏸️ 暂缓':'⏳ 待回执';
     return `<div class="msg" style="max-width:100%">
       <div class="from">→ ${t.target} · ${fmtTime(t.time)}</div>
       <div><b>${t.title}</b></div>
