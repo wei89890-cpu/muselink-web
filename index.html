@@ -238,7 +238,10 @@ function handleMsg(topic,env,raw){
   if(topic.endsWith('/chat')){
     // 过滤掉自己发的（本地已添加，避免重复）
     if(env.from==='web') return;
-    addMsg('chat',env.from,env.body||'',env.ts);
+    const body=env.body||'';
+    // 过滤系统播报：回执规范、done:开头的系统消息不在群聊显示
+    if(body.includes('回执规范') || body.startsWith('done:')) return;
+    addMsg('chat',env.from,body,env.ts);
   } else if(topic.endsWith('/node/web/in')){
     // 发给 web 的 DM/回执
     const t=env.type||'dm';
