@@ -189,6 +189,8 @@ function setStatus(cls,text){
 function handleMsg(topic,env,raw){
   const now=Date.now()/1000;
   if(topic.endsWith('/chat')){
+    // 过滤掉自己发的（本地已添加，避免重复）
+    if(env.from==='web') return;
     addMsg('chat',env.from,env.body||'',env.ts);
   } else if(topic.endsWith('/node/web/in')){
     // 发给 web 的 DM/回执
