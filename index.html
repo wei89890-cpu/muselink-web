@@ -138,6 +138,10 @@ button:disabled{background:#ccc}
 <script>
 // Workers 实时网关：无硬编码凭证。网关地址与 token 存在 localStorage（首次打开填写）。
 let WS_URL=localStorage.getItem('mlink_ws_url')||'';
+// Auto-derive WS URL if served from the Workers itself (dynamic hosting)
+if(!WS_URL && location.hostname.endsWith('.workers.dev')){
+  WS_URL='wss://'+location.hostname;
+}
 let WS_TOKEN=localStorage.getItem('mlink_ws_token')||'';
 let NODES=JSON.parse(localStorage.getItem('mlink_nodes')||'["muse","muse-1","muse-2","muse-3"]');
 function saveNodes(){ localStorage.setItem('mlink_nodes',JSON.stringify(NODES)); }
