@@ -85,15 +85,19 @@ button:disabled{background:#ccc}
 </div>
 </div>
 
+<div class="card" id="machine-mgr">
+<h3 style="margin:0 0 8px">🖥️ 机器管理</h3>
+<div class="row">
+<input id="new-node" placeholder="新机器名，如 muse-4" style="flex:1">
+<button onclick="addNode()" style="width:auto;padding:8px 16px">+ 添加</button>
+</div>
+<small style="color:#666">点击机器卡片上的 × 可删除</small>
+</div>
+
 <div class="card" id="task-form">
 <h3 style="margin:0 0 8px">📋 派任务</h3>
 <div class="row">
 <select id="target">
-<option value="muse">muse</option>
-<option value="muse-1">muse-1</option>
-<option value="muse-2">muse-2</option>
-<option value="muse-3">muse-3</option>
-<option value="all">全部 (群发)</option>
 </select>
 </div>
 <input id="task-title" placeholder="任务标题">
@@ -119,7 +123,32 @@ const USER='mqtt_user';
 const PASS='123456789Wl-'; // 部署时填写
 const SITE='1a6fea9c';
 const ROOT=`mlink/v1/${SITE}`;
-const NODES=['muse','muse-1','muse-2','muse-3'];
+let NODES=JSON.parse(localStorage.getItem('mlink_nodes')||'["muse","muse-1","muse-2","muse-3"]');
+function saveNodes(){ localStorage.setItem('mlink_nodes',JSON.stringify(NODES)); }
+function renderNodes(){
+  const grid=document.getElementById('nodes'); grid.innerHTML='';
+  NODES.forEach(n=>{
+    const d=document.createElement('div'); d.className='node'; d.id='node-'+n; d.onclick=()=>openDM(n);
+    d.innerHTML=`<span class="dot offline" id="dot-${n}"></span><b>${n}</b> <button onclick="event.stopPropagation();removeNode('${n}')" style="background:#f44;padding:2px 8px;font-size:12px;margin:0">×</button><br><small class="st" id="st-${n}">离线</small>`;
+    grid.appendChild(d);
+  });
+  const sel=document.getElementById('target'); sel.innerHTML='';
+  NODES.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
+  const all=document.createElement('option'); all.value='all'; all.textContent='全部 (群发)'; sel.appendChild(all);
+  if(client&&client.connected){ NODES.forEach(n=>client.subscribe(`${ROOT}/node/${n}/status`,{qos:1})); }
+}
+function addNode(){
+  const inp=document.getElementById('new-node'); const n=inp.value.trim();
+  if(!n){ alert('输入机器名'); return; }
+  if(NODES.includes(n)){ alert('已存在'); return; }
+  NODES.push(n); nodes[n]={online:false,lastSeen:0}; saveNodes(); renderNodes(); inp.value='';
+  if(client&&client.connected) client.subscribe(`${ROOT}/node/${n}/status`,{qos:1});
+}
+function removeNode(n){
+  if(!confirm(`删除机器 ${n}？`)) return;
+  NODES=NODES.filter(x=>x!==n); delete nodes[n]; saveNodes(); renderNodes();
+  if(client&&client.connected) client.unsubscribe(`${ROOT}/node/${n}/status`);
+}
 const nodes={}; // {id: {online, lastSeen}}
 const tasks={}; // {mid: {title, target, status, time}}
 const dmHistory={}; // {nodeId: [{from, text, time}]}
