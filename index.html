@@ -109,6 +109,10 @@ button:disabled{background:#ccc}
 </div>
 <input id="task-title" placeholder="任务标题">
 <textarea id="task-body" placeholder="任务正文" rows="3"></textarea>
+<div style="margin:6px 0">
+<input type="file" id="task-file" style="font-size:14px">
+<small style="color:#666;display:block;margin-top:4px">附件 ≤512KB 直接发送；更大请传 Drive 后贴链接</small>
+</div>
 <button onclick="sendTask()">派发</button>
 </div>
 
@@ -297,20 +301,46 @@ function sendTask(){
   const target=document.getElementById('target').value;
   const title=document.getElementById('task-title').value.trim();
   const body=document.getElementById('task-body').value.trim();
+  const fileInput=document.getElementById('task-file');
+  const file=fileInput.files[0];
   if(!title||!body){alert('请填写标题和正文');return;}
   if(!client||!client.connected){alert('未连接');return;}
-  const mid=Math.random().toString(16).slice(2,18);
-  const env={proto:'muselink/1',from:'web',ts:Date.now()/1000,mid,type:'task',title,body};
-  const targets=target==='all'?NODES:[target];
-  targets.forEach(tg=>{
-    tasks[mid+tg]={title,target:tg,status:'pending',time:Date.now()/1000,mid};
-    client.publish(`${ROOT}/node/${tg}/in`,JSON.stringify({...env,mid:mid+tg}),{qos:1});
-  });
-  saveTasks();
-  renderTasks();
-  addMsg('chat','我',`📋 派任务 → ${target}: ${title}`,Date.now()/1000);
-  document.getElementById('task-title').value='';
-  document.getElementById('task-body').value='';
+  
+  const doSend=(fileData)=>{
+    const mid=Math.random().toString(16).slice(2,18);
+    const env={proto:'muselink/1',from:'web',ts:Date.now()/1000,mid,type:'task',title,body};
+    if(fileData){
+      env.file_name=fileData.name;
+      env.file_size=fileData.size;
+      env.file_data=fileData.data; // base64
+    }
+    const targets=target==='all'?NODES:[target];
+    targets.forEach(tg=>{
+      tasks[mid+tg]={title,target:tg,status:'pending',time:Date.now()/1000,mid};
+      client.publish(`${ROOT}/node/${tg}/in`,JSON.stringify({...env,mid:mid+tg}),{qos:1});
+    });
+    saveTasks();
+    renderTasks();
+    addMsg('chat','我',`📋 派任务 → ${target}: ${title}${fileData?' 📎'+fileData.name:''}`,Date.now()/1000);
+    document.getElementById('task-title').value='';
+    document.getElementById('task-body').value='';
+    fileInput.value='';
+  };
+  
+  if(file){
+    if(file.size>512*1024){
+      alert('文件超过512KB，请上传到 Google Drive 后在正文贴链接');
+      return;
+    }
+    const reader=new FileReader();
+    reader.onload=(e)=>{
+      const base64=e.target.result.split(',')[1];
+      doSend({name:file.name,size:file.size,data:base64});
+    };
+    reader.readAsDataURL(file);
+  }else{
+    doSend(null);
+  }
 }
 
 function updateTaskStatus(env){
