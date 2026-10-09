@@ -249,12 +249,11 @@ function handleMsg(topic,env,raw){
       addMsg('chat',env.from,`[任务] ${env.title||''}`,env.ts);
     } else {
       const body=(env.body||'').slice(0,500);
-      // 任务回执
+      // 任务回执：只更新任务状态和DM面板，不在群聊显示
       if(body.startsWith('done:')||body.startsWith('hold:')){
         updateTaskStatus(env);
       }
       addDM(env.from,body,env.ts);
-      addMsg('chat',env.from,`[私聊] ${body.slice(0,100)}`,env.ts);
     }
   }
 }
