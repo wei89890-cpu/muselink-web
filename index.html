@@ -28,6 +28,7 @@ h2{margin:0 0 12px}
 .node .last{font-size:11px;color:#888}
 /* 聊天 */
 #chat{height:380px;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
+#chat .msg{font-size:13px;padding:6px 10px}
 .msg{padding:8px 12px;background:#f1f5f9;border-radius:12px;max-width:85%;word-break:break-word}
 .msg.me{background:#007aff;color:#fff;align-self:flex-end}
 .msg .from{font-size:11px;opacity:.7;margin-bottom:2px}
@@ -38,12 +39,12 @@ h2{margin:0 0 12px}
 .task-done{background:#d1fae5;color:#065f46}
 .task-failed{background:#fee2e2;color:#991b1b}
 #input-area{display:flex;gap:8px}
-#input{flex:1;padding:10px;border:1px solid #ddd;border-radius:10px;font-size:14px}
+#input{flex:1;padding:10px;border:1px solid #ddd;border-radius:10px;font-size:16px}
 button{padding:10px 18px;background:#007aff;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:14px;white-space:nowrap}
 button:hover{background:#0062cc}
 button:disabled{background:#ccc}
 /* 任务表单 */
-#task-form input,#task-form textarea,#task-form select{width:100%;padding:9px;margin:6px 0;border:1px solid #ddd;border-radius:8px;font-size:14px}
+#task-form input,#task-form textarea,#task-form select{width:100%;padding:9px;margin:6px 0;border:1px solid #ddd;border-radius:8px;font-size:16px}
 #task-form .row{display:flex;gap:8px}
 #task-form .row select{flex:1}
 /* DM 弹窗 */
@@ -321,11 +322,11 @@ function renderTasks(){
   el.innerHTML=list.map(t=>{
     const cls=t.status==='done'?'task-done':t.status==='failed'?'task-failed':'task-pending';
     const txt=t.status==='done'?'✅ 完成':t.status==='failed'?'❌ 失败':'⏳ 待回执';
-    return `<div class="msg" style="max-width:100%;padding:12px 14px;font-size:15px;margin-bottom:8px">
+    return `<div class="msg" style="max-width:100%">
       <div class="from">→ ${t.target} · ${fmtTime(t.time)}</div>
       <div><b>${t.title}</b></div>
       <div class="task-status ${cls}">${txt}</div>
-      ${t.receipt?`<div style="font-size:13px;color:#666;margin-top:6px">${t.receipt}</div>`:''}
+      ${t.receipt?`<div style="font-size:12px;color:#666;margin-top:4px">${t.receipt}</div>`:''}
     </div>`;
   }).join('');
 }
