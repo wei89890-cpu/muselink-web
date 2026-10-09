@@ -85,13 +85,19 @@ button:disabled{background:#ccc}
 </div>
 </div>
 
-<div class="card" id="machine-mgr">
-<h3 style="margin:0 0 8px">🖥️ 机器管理</h3>
+<div class="card" id="machine-mgr" style="display:none">
+<h3 style="margin:0 0 8px">🖥️ 机器管理 <button onclick="showPage('main')" style="float:right;background:#666;padding:4px 12px;font-size:14px">← 返回</button></h3>
 <div class="row">
 <input id="new-node" placeholder="新机器名，如 muse-4" style="flex:1">
 <button onclick="addNode()" style="width:auto;padding:8px 16px">+ 添加</button>
 </div>
 <small style="color:#666">点击机器卡片上的 × 可删除</small>
+<div id="mgr-nodes" style="margin-top:12px"></div>
+</div>
+
+<div id="main-page">
+<div class="card" style="padding:8px;text-align:right">
+<button onclick="showPage('mgr')" style="background:#666;padding:6px 16px;font-size:14px">⚙️ 机器管理</button>
 </div>
 
 <div class="card" id="task-form">
@@ -129,7 +135,7 @@ function renderNodes(){
   const grid=document.getElementById('nodes'); grid.innerHTML='';
   NODES.forEach(n=>{
     const d=document.createElement('div'); d.className='node'; d.id='node-'+n; d.onclick=()=>openDM(n);
-    d.innerHTML=`<span class="dot offline" id="dot-${n}"></span><b>${n}</b> <button onclick="event.stopPropagation();removeNode('${n}')" style="background:#f44;padding:2px 8px;font-size:12px;margin:0">×</button><br><small class="st" id="st-${n}">离线</small>`;
+    d.innerHTML=`<span class="dot offline" id="dot-${n}"></span><b>${n}</b><br><small class="st" id="st-${n}">离线</small>`;
     grid.appendChild(d);
   });
   const sel=document.getElementById('target'); sel.innerHTML='';
@@ -374,6 +380,22 @@ setInterval(()=>{
   });
   if(changed) renderNodes();
 },10000);
+
+function showPage(p){
+  document.getElementById('machine-mgr').style.display = p==='mgr' ? 'block' : 'none';
+  document.getElementById('main-page').style.display = p==='mgr' ? 'none' : 'block';
+  if(p==='mgr') renderMgrNodes();
+}
+function renderMgrNodes(){
+  const c=document.getElementById('mgr-nodes'); c.innerHTML='';
+  NODES.forEach(n=>{
+    const d=document.createElement('div');
+    d.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #eee';
+    d.innerHTML=`<span><b>${n}</b> <small style="color:#666">${nodes[n]&&nodes[n].online?'🟢在线':'🔴离线'}</small></span><button onclick="removeNode('${n}')" style="background:#f44;padding:4px 12px;font-size:14px">删除</button>`;
+    c.appendChild(d);
+  });
+}
 </script>
+</div>
 </body>
 </html>
