@@ -81,18 +81,20 @@ button:disabled{background:#ccc}
 </div>
 </div>
 <div id="tab-tasks" style="display:none">
-<div id="task-list" style="max-height:300px;overflow-y:auto"></div>
+<div id="task-list"></div>
 </div>
 </div>
 
-<div class="card" id="machine-mgr" style="display:none">
-<h3 style="margin:0 0 8px">🖥️ 机器管理 <button onclick="showPage('main')" style="float:right;background:#666;padding:4px 12px;font-size:14px">← 返回</button></h3>
+<div id="machine-mgr" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;padding:20px;box-sizing:border-box">
+<div class="card" style="max-width:500px;margin:50px auto;max-height:80vh;overflow-y:auto">
+<h3 style="margin:0 0 8px">🖥️ 机器管理 <button onclick="showPage('main')" style="float:right;background:#666;padding:4px 12px;font-size:14px">✕ 关闭</button></h3>
 <div class="row">
 <input id="new-node" placeholder="新机器名，如 muse-4" style="flex:1">
 <button onclick="addNode()" style="width:auto;padding:8px 16px">+ 添加</button>
 </div>
 <small style="color:#666">点击机器卡片上的 × 可删除</small>
 <div id="mgr-nodes" style="margin-top:12px"></div>
+</div>
 </div>
 
 <div class="card" id="task-form">
@@ -369,7 +371,7 @@ setInterval(()=>{
 function showPage(p){
   const mgr=document.getElementById('machine-mgr');
   mgr.style.display = p==='mgr' ? 'block' : 'none';
-  if(p==='mgr'){ renderMgrNodes(); mgr.scrollIntoView(); }
+  if(p==='mgr') renderMgrNodes();
 }
 function renderMgrNodes(){
   const c=document.getElementById('mgr-nodes'); c.innerHTML='';
